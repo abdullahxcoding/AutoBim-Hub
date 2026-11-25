@@ -8,9 +8,11 @@ import {
  *  The navbar dropdown, the landing-page grid and every product
  *  page are generated from this list.
  *
- *  PRICING: a tool is FREE while `pricing` is null. To charge for it,
- *  fill in the `pricing` block (see the commented template at the
- *  bottom) and paste the tool's Stripe Price id into `priceId`.
+ *  PRICING: a tool is FREE while `pricing` is null. Prices shown here
+ *  are for DISPLAY only. What customers are actually charged comes from
+ *  Stripe: the checkout function looks prices up by lookup key
+ *  `<slug>_month` / `<slug>_year` (created by scripts/stripe-setup.mjs).
+ *  If you change a price here, change it in Stripe too.
  *
  *  IMPORTANT: every `slug` here must also exist in the `products`
  *  table in Supabase (see migration 007). The subscriptions table
@@ -24,18 +26,14 @@ import {
  * ─────────────────────────────────────────────────────────────
  */
 
-// Every tool sells at $15 / user / month with a 14-day trial, so they share
-// one pricing object. For quick testing you can point them all at a single
-// Stripe price: create one recurring $15/month price and paste its id below.
-// For production, give each tool its OWN Stripe price (better per-tool
-// reporting) by overriding `pricing` on that product with its own priceId.
-const MONTHLY_15 = {
-  amount: 15,
+// Every tool: $15/month or $150/year (2 months free). The 14-day trial is
+// per ACCOUNT, covers every tool and needs no card (see migration 008).
+export const TRIAL_DAYS = 14
+const STANDARD = {
   currency: 'USD',
-  interval: 'month',
-  trialDays: 14,
+  month: 15,
+  year: 150,
   note: 'Per user. Cancel anytime. Volume licensing available.',
-  priceId: 'price_REPLACE_WITH_STRIPE_15_MONTH', // ← paste your $15/mo Stripe price id
 }
 
 const COMMON = {
@@ -44,7 +42,7 @@ const COMMON = {
   released: '2026-11-24',
   compatibility: ['Revit 2022', 'Revit 2023', 'Revit 2024', 'Revit 2025', 'Revit 2026'],
   requirements: ['pyRevit 4.8 or newer', 'Windows 10/11'],
-  pricing: MONTHLY_15,
+  pricing: STANDARD,
   price: null,
   docs: [
     { slug: 'getting-started', title: 'Getting Started' },
@@ -200,15 +198,9 @@ export function downloadHref(product) {
 }
 
 /*
- *  PRICING TEMPLATE — paste into a product (replacing `pricing: null`)
- *  to charge for it:
+ *  PRICING TEMPLATE — give one product a different price:
  *
- *  pricing: {
- *    amount: 12,
- *    currency: 'USD',          // 'USD' | 'EUR' | 'GBP'
- *    interval: 'month',        // 'month' | 'year'
- *    trialDays: 14,
- *    note: 'Cancel anytime.',
- *    priceId: 'price_...',     // the Stripe Price id for this plan
- *  },
+ *  pricing: { currency: 'USD', month: 20, year: 200, note: 'Cancel anytime.' },
+ *
+ *  Then re-run scripts/stripe-setup.mjs so Stripe has the same prices.
  */

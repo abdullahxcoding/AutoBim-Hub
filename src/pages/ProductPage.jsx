@@ -2,11 +2,11 @@ import { useEffect } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Download, BookOpen, MessageSquare, Check, ChevronRight, Calendar, Tag } from 'lucide-react'
-import { getProduct, downloadHref, PRODUCTS } from '../data/products.js'
+import { getProduct, downloadHref, PRODUCTS, TRIAL_DAYS } from '../data/products.js'
 import { contact } from '../data/site.js'
 import { soon } from '../components/Toast.jsx'
-import SubscribeButton from '../components/SubscribeButton.jsx'
-import { priceLabel } from '../lib/billing.js'
+import AddToCartButton from '../components/AddToCartButton.jsx'
+import { money } from '../lib/billing.js'
 import NotFound from './NotFound.jsx'
 
 const ease = [0.22, 1, 0.36, 1]
@@ -57,7 +57,7 @@ export default function ProductPage() {
           </div>
 
           <motion.div className="pp-actions" {...fade(0.26)}>
-            {p.pricing && <SubscribeButton product={p} />}
+            {p.pricing && <AddToCartButton product={p} />}
             {href ? (
               <a className={`btn ${p.pricing ? 'btn-ghost' : 'btn-primary'}`} href={href} download={p.download.fileName || true}>
                 <Download size={17} /> Download{p.download.size && <span className="btn-meta">{p.download.size}</span>}
@@ -76,9 +76,9 @@ export default function ProductPage() {
               <MessageSquare size={17} /> {p.pricing ? 'Request a quote' : 'Ask a question'}
             </button>
           </motion.div>
-          {p.pricing?.trialDays > 0 && (
+          {p.pricing && (
             <motion.p className="pp-trial-hint" {...fade(0.32)}>
-              Free {p.pricing.trialDays}-day trial · no card charged until it ends · downloading is always free.
+              Free {TRIAL_DAYS}-day trial of every tool when you create an account · no card needed · downloading is always free.
             </motion.p>
           )}
         </div>
@@ -130,12 +130,16 @@ export default function ProductPage() {
             {p.pricing ? (
               <>
                 <p className="pp-price">
-                  {priceLabel(p.pricing)}
+                  {money(p.pricing.month, p.pricing.currency)} / month
                   <span className="pp-per">per user</span>
                 </p>
-                {p.pricing.trialDays > 0 && <p className="pp-trial-badge">{p.pricing.trialDays}-day free trial</p>}
+                <p className="pp-price-alt">
+                  or {money(p.pricing.year, p.pricing.currency)} / year
+                  <span className="pp-save">save {money(p.pricing.month * 12 - p.pricing.year, p.pricing.currency)}</span>
+                </p>
+                <p className="pp-trial-badge">{TRIAL_DAYS}-day free trial · no card</p>
                 {p.pricing.note && <p className="pp-note">{p.pricing.note}</p>}
-                <div className="pp-price-cta"><SubscribeButton product={p} className="btn btn-primary btn-sm" /></div>
+                <div className="pp-price-cta"><AddToCartButton product={p} className="btn btn-primary btn-sm" /></div>
               </>
             ) : (
               <p className="pp-price">Free</p>

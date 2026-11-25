@@ -7,3 +7,7 @@ verify_jwt = true
 
 [functions.stripe-webhook]
 verify_jwt = false
+
+# The Revit tools authenticate by licence key, not a Supabase session.
+[functions.verify]
+verify_jwt = false

@@ -1,47 +1,58 @@
 import { supabase } from './supabase.js'
 
 /**
- * Billing config. One place to switch payment provider later.
- *   provider: 'paddle' | 'lemonsqueezy'  (used by the Edge Functions)
- * The frontend doesn't talk to the provider directly — it asks our
- * `create-checkout` Edge Function for a checkout URL, so secret keys
- * never touch the browser.
+ * Billing helpers. The browser never sees Stripe secrets or price ids:
+ * it sends the cart (tool slugs + month/year) to our `create-checkout`
+ * Edge Function, which looks up the real Stripe prices server-side.
  */
 export const BILLING = {
   provider: 'stripe',
-  // Checkout is live: Edge Functions deployed and Stripe keys set.
   live: true,
 }
 
 const CURRENCY = { USD: '$', EUR: '€', GBP: '£' }
+export const money = (n, currency = 'USD') => `${CURRENCY[currency] || ''}${n}`
 
-/** "$12 / month" style label from a product's pricing object. */
-export function priceLabel(pricing) {
+/** "$15 / month" or "$150 / year" for one product. */
+export function priceLabel(pricing, interval = 'month') {
   if (!pricing) return 'Free'
-  const sym = CURRENCY[pricing.currency] || ''
-  return `${sym}${pricing.amount} / ${pricing.interval}`
+  return `${money(pricing[interval], pricing.currency)} / ${interval}`
 }
 
-/**
- * Start checkout for a product. Returns { ok, url, message }.
- * Calls the `create-checkout` Edge Function, which creates a provider
- * checkout for the signed-in user and returns its hosted URL.
- */
-export async function startCheckout(product) {
+/** Turn an Edge Function error into its real message ("No such price…"). */
+async function fnError(error) {
+  let message = error.message
+  try {
+    const body = await error.context?.json()
+    if (body?.error) message = body.error
+  } catch { /* body wasn't JSON — keep the generic message */ }
+  return message
+}
+
+/** Start checkout for the cart. Returns { ok, url, message }. */
+export async function startCheckout(slugs, interval) {
   if (!supabase) return { ok: false, message: 'Accounts are not configured yet.' }
-  if (!BILLING.live) {
-    return { ok: false, message: 'Checkout isn’t live yet. Please check back soon.' }
-  }
+  if (!BILLING.live) return { ok: false, message: 'Checkout isn’t live yet. Please check back soon.' }
   const { data, error } = await supabase.functions.invoke('create-checkout', {
     body: {
-      slug: product.slug,
-      priceId: product.pricing?.priceId,
-      trialDays: product.pricing?.trialDays ?? 0,
+      slugs,
+      interval,
       successUrl: `${window.location.origin}/checkout/success`,
-      cancelUrl: `${window.location.origin}/products/${product.slug}`,
+      cancelUrl: `${window.location.origin}/cart`,
     },
   })
-  if (error) return { ok: false, message: error.message }
+  if (error) return { ok: false, message: await fnError(error) }
   if (!data?.url) return { ok: false, message: 'Could not start checkout.' }
+  return { ok: true, url: data.url }
+}
+
+/** Open Stripe's customer portal (cancel, change card, invoices). */
+export async function openBillingPortal() {
+  if (!supabase) return { ok: false, message: 'Accounts are not configured yet.' }
+  const { data, error } = await supabase.functions.invoke('billing-portal', {
+    body: { returnUrl: `${window.location.origin}/account` },
+  })
+  if (error) return { ok: false, message: await fnError(error) }
+  if (!data?.url) return { ok: false, message: 'Could not open billing.' }
   return { ok: true, url: data.url }
 }

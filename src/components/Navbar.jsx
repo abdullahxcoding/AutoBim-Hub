@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ChevronDown, Menu, X, ArrowRight, User } from 'lucide-react'
+import { ChevronDown, Menu, X, ArrowRight, User, ShoppingCart } from 'lucide-react'
 import { NAV } from '../data/content.js'
 import { useAuth } from '../lib/AuthContext.jsx'
+import { useCart } from '../lib/CartContext.jsx'
 
 export function Logo({ light = true }) {
   return (
@@ -17,6 +18,7 @@ export function Logo({ light = true }) {
 export default function Navbar() {
   const { pathname, hash } = useLocation()
   const { user, configured } = useAuth()
+  const { count } = useCart()
   const isHome = pathname === '/'
   const [scrolled, setScrolled] = useState(false)
   const [open, setOpen] = useState(null)
@@ -110,6 +112,12 @@ export default function Navbar() {
             ))}
           </ul>
         </nav>
+        {user && !isHome && (
+          <Link to="/cart" className="nav-cart" aria-label={`Cart, ${count} item${count === 1 ? '' : 's'}`}>
+            <ShoppingCart size={18} />
+            {count > 0 && <span className="nav-cart-count">{count}</span>}
+          </Link>
+        )}
         {configured && (
           user ? (
             <Link to="/account" className="nav-account" aria-label="My account">
@@ -153,6 +161,11 @@ export default function Navbar() {
                 )}
               </div>
             ))}
+            {user && (
+              <Link to="/cart" className="btn btn-ghost">
+                <ShoppingCart size={16} /> Cart{count > 0 ? ` (${count})` : ''}
+              </Link>
+            )}
             {configured && (
               <Link to={user ? '/account' : '/login'} className="btn btn-primary">
                 <User size={16} /> {user ? 'My account' : 'Log in'}
