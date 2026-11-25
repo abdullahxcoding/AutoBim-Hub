@@ -54,11 +54,14 @@ const COMMON = {
   ],
 }
 
-const dl = (slug, name) => ({
-  url: '',
-  fileName: `${name}-1.0.0-Setup.exe`,
-  size: '',
-})
+// Installers live in the public Supabase Storage bucket "installers".
+// To release an update: upload the new <Name>-<version>-Setup.exe there,
+// then change the version (and size) on that product's dl(...) line.
+const INSTALLERS = 'https://ljrubyyjmbkbxyzrzcjp.supabase.co/storage/v1/object/public/installers/'
+const dl = (slug, name, size, version = '1.0.0') => {
+  const fileName = `${name}-${version}-Setup.exe`
+  return { url: INSTALLERS + fileName, fileName, size }
+}
 
 export const PRODUCTS = [
   {
@@ -76,7 +79,7 @@ export const PRODUCTS = [
       'Builds the pipes as a real Revit system',
       'Settings dialog to control the conversion',
     ],
-    download: dl('pipe-2d-3d-convertor', 'Pipe2D3DConvertor'),
+    download: dl('pipe-2d-3d-convertor', 'Pipe2D3DConvertor', '3.4 MB'),
   },
   {
     ...COMMON,
@@ -93,7 +96,7 @@ export const PRODUCTS = [
       'Unconnected terminals left blank, never counted as 0',
       'Read-only — safe to run on a live model',
     ],
-    download: dl('airflow-summary', 'AirTerminalFlowSummary'),
+    download: dl('airflow-summary', 'AirTerminalFlowSummary', '2.2 MB'),
   },
   {
     ...COMMON,
@@ -110,7 +113,7 @@ export const PRODUCTS = [
       'Blank Comments flag connections that were never made',
       'Reports equipment found, skipped and ducts updated',
     ],
-    download: dl('equipment-mark-to-ducts', 'EquipmentMarkToDucts'),
+    download: dl('equipment-mark-to-ducts', 'EquipmentMarkToDucts', '2.2 MB'),
   },
   {
     ...COMMON,
@@ -127,7 +130,7 @@ export const PRODUCTS = [
       'Preview of every change before it is written',
       'Empty cells are left alone; whole import undoes in one step',
     ],
-    download: dl('import-export-parameter', 'ImportExportParameter'),
+    download: dl('import-export-parameter', 'ImportExportParameter', '2.2 MB'),
   },
   {
     ...COMMON,
@@ -144,7 +147,7 @@ export const PRODUCTS = [
       'Checks your input before doing anything',
       'Reports how many valves were placed and their IDs',
     ],
-    download: dl('inline-valve-placer', 'InlinePipeValvePlacer'),
+    download: dl('inline-valve-placer', 'InlinePipeValvePlacer', '2.2 MB'),
   },
   {
     ...COMMON,
@@ -161,7 +164,7 @@ export const PRODUCTS = [
       'Reads every value back from the model to verify it',
       'Safe to re-run; already-correct spaces are left alone',
     ],
-    download: dl('room-name-to-spaces', 'RoomNameToSpaces'),
+    download: dl('room-name-to-spaces', 'RoomNameToSpaces', '2.2 MB'),
   },
   {
     ...COMMON,
@@ -179,7 +182,7 @@ export const PRODUCTS = [
       'Skips sheet numbers that already exist',
     ],
     requirements: [...COMMON.requirements, 'A title block loaded in the project'],
-    download: dl('sheets-from-unplaced-plans', 'CreateSheetsFromUnplacedPlans'),
+    download: dl('sheets-from-unplaced-plans', 'CreateSheetsFromUnplacedPlans', '2.2 MB'),
   },
 ]
 
