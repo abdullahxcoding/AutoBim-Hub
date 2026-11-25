@@ -1,0 +1,9 @@
+# Minimal Supabase CLI config. The project is linked with:
+#   npx supabase link --project-ref <your-project-ref>
+project_id = "autobim-hub"
+
+[functions.create-checkout]
+verify_jwt = true
+
+[functions.stripe-webhook]
+verify_jwt = false
