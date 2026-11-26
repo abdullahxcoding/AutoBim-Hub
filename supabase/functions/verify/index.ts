@@ -6,10 +6,18 @@
 //  for the tool. Devices belong to the licence (2-device limit).
 //
 //  Request  (POST JSON):
-//    { licence_key, tool_slug, device_id, device_name? }
+//    { licence_key, tool_slug, device_id, device_name?, nonce? }
 //  Response (always 200 unless the request is malformed):
-//    { ok: true,  status: "trial"|"subscribed", access_until, device_count, device_limit }
+//    { ok: true,  status: "trial"|"subscribed", access_until, device_count, device_limit, token }
 //    { ok: false, reason, message, device_count?, device_limit? }
+//
+//  `token` is what the compiled tools actually trust: base64url(claims JSON)
+//  + "." + base64url(RSASSA-PKCS1-v1_5/SHA-256 signature). Claims bind the
+//  answer to the tool, the device, the client's one-time nonce and a short
+//  expiry (TOKEN_TTL_SECONDS = the client cache lifetime). The private key is
+//  the LICENCE_SIGNING_KEY secret (PKCS#8, base64); its public half is compiled
+//  into AutoBimCore.dll. Without the secret, positive answers carry no token
+//  and new tools refuse to run (fail closed).
 //
 //  Authenticated by the LICENCE KEY, not a Supabase session — so
 //  verify_jwt = false (see config.toml). The anon key is still sent by
@@ -17,6 +25,7 @@
 //
 //  Deploy:  npx supabase functions deploy verify --no-verify-jwt
 //  Secrets: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY (set by the platform)
+//           LICENCE_SIGNING_KEY  (npx supabase secrets set LICENCE_SIGNING_KEY=...)
 // ─────────────────────────────────────────────────────────────
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
@@ -26,6 +35,34 @@ const admin = createClient(
 )
 
 const DEVICE_LIMIT = 2
+const TOKEN_TTL_SECONDS = 300
+
+// ── token signing ───────────────────────────────────────────────
+let signingKey: CryptoKey | null | undefined
+
+async function getSigningKey(): Promise<CryptoKey | null> {
+  if (signingKey !== undefined) return signingKey
+  const b64 = (Deno.env.get('LICENCE_SIGNING_KEY') ?? '').replace(/\s+/g, '')
+  if (!b64) return (signingKey = null)
+  const der = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))
+  signingKey = await crypto.subtle.importKey(
+    'pkcs8', der, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['sign'])
+  return signingKey
+}
+
+function b64url(bytes: Uint8Array) {
+  let bin = ''
+  for (const b of bytes) bin += String.fromCharCode(b)
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+
+async function signToken(claims: Record<string, unknown>): Promise<string | null> {
+  const key = await getSigningKey()
+  if (!key) return null
+  const body = b64url(new TextEncoder().encode(JSON.stringify(claims)))
+  const sig = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, new TextEncoder().encode(body))
+  return body + '.' + b64url(new Uint8Array(sig))
+}
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -51,7 +88,7 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
   if (req.method !== 'POST') return deny('bad_request', 'POST only')
 
-  let payload: { licence_key?: string; tool_slug?: string; device_id?: string; device_name?: string }
+  let payload: { licence_key?: string; tool_slug?: string; device_id?: string; device_name?: string; nonce?: string }
   try {
     payload = await req.json()
   } catch {
@@ -62,6 +99,7 @@ Deno.serve(async (req) => {
   const tool = (payload.tool_slug ?? '').trim()
   const deviceId = (payload.device_id ?? '').trim()
   const deviceName = (payload.device_name ?? '').trim() || null
+  const nonce = (payload.nonce ?? '').trim().slice(0, 128)
   if (!key || !tool || !deviceId) {
     return json({ ok: false, reason: 'bad_request', message: 'licence_key, tool_slug and device_id are required' }, 400)
   }
@@ -154,11 +192,25 @@ Deno.serve(async (req) => {
   const status = subLive ? 'subscribed' : 'trial'
   const accessUntil = new Date(subLive ? subUntil : trialEnd).toISOString()
 
+  const iat = Math.floor(now / 1000)
+  let token: string | null = null
+  try {
+    token = await signToken({
+      v: 1, tool, device: deviceId, nonce, status, access_until: accessUntil,
+      device_count: deviceCount, device_limit: DEVICE_LIMIT,
+      iat, exp: iat + TOKEN_TTL_SECONDS,
+    })
+  } catch (e) {
+    console.error('token signing failed', e)
+  }
+  if (!token) console.error('LICENCE_SIGNING_KEY missing or invalid: positive answer sent without a token')
+
   return json({
     ok: true,
     status,
     access_until: accessUntil,
     device_count: deviceCount,
     device_limit: DEVICE_LIMIT,
+    token,
   })
 })
